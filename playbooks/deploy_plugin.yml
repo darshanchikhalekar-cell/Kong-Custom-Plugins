@@ -1,0 +1,27 @@
+---
+- name: Deploy Kong Custom Plugin
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+
+    - name: Copy plugin files
+      copy:
+        src: "../plugins/{{ plugin_name }}"
+        dest: "{{ kong_plugin_dir }}/{{ plugin_name }}"
+        owner: kong
+        group: kong
+        mode: '0755'
+
+    - name: Ensure plugin is enabled in kong.conf
+      lineinfile:
+        path: /etc/kong/kong.conf
+        regexp: '^plugins='
+        line: "plugins = bundled,{{ plugin_name }}"
+        backup: yes
+
+    - name: Restart Kong
+      service:
+        name: kong
+        state: restarted
