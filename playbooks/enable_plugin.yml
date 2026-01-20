@@ -1,0 +1,19 @@
+---
+- name: Enable Kong Plugin
+  hosts: all
+  gather_facts: false
+
+  tasks:
+
+    - name: Enable plugin globally
+      command: >
+        curl -s -X POST {{ kong_admin_url }}/plugins
+        -d "name={{ plugin_name }}"
+        {% if plugin_config is defined %}
+        -d "config={{ plugin_config }}"
+        {% endif %}
+      register: plugin_output
+
+    - name: Plugin enabled
+      debug:
+        msg: "Plugin {{ plugin_name }} enabled successfully"
