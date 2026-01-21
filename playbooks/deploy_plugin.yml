@@ -1,11 +1,12 @@
 ---
-- name: Deploy Kong Custom Plugin
+- name: Deploy Kong Custom Plugin (Multi-plugin safe)
   hosts: all
   become: true
   gather_facts: false
 
   vars:
     kong_plugin_dir: /usr/local/share/lua/5.1/kong/plugins
+    kong_conf_file: /etc/kong/kong.conf
 
   tasks:
 
@@ -40,11 +41,33 @@
         msg: "handler.lua not found for plugin {{ plugin_name }}"
       when: not handler_check.stat.exists
 
-    - name: Ensure plugin is enabled in kong.conf
+    - name: Read existing plugins from kong.conf
+      shell: "grep '^plugins=' {{ kong_conf_file }} || true"
+      register: plugins_line
+      changed_when: false
+
+    - name: Build updated plugins list
+      set_fact:
+        updated_plugins: >-
+          {{
+            (
+              (
+                plugins_line.stdout
+                | regex_replace('^plugins=\\s*', '')
+                | default('bundled', true)
+                | split(',')
+              )
+              + [plugin_name]
+            )
+            | unique
+            | join(',')
+          }}
+
+    - name: Update plugins list in kong.conf (append, do not replace)
       lineinfile:
-        path: /etc/kong/kong.conf
+        path: "{{ kong_conf_file }}"
         regexp: '^plugins='
-        line: "plugins = bundled,{{ plugin_name }}"
+        line: "plugins = {{ updated_plugins }}"
         backup: yes
 
     - name: Restart Kong safely
