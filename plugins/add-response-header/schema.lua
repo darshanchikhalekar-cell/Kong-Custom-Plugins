@@ -1,4 +1,11 @@
 return {
   name = "add-response-header",
-  fields = {}
+  fields = {
+    {
+      config = {
+        type = "record",
+        fields = {}
+      }
+    }
+  }
 }
