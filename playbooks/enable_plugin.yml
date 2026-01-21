@@ -1,19 +1,22 @@
 ---
-- name: Enable Kong Plugin
+- name: Enable Kong Custom Plugin
   hosts: all
   gather_facts: false
 
   tasks:
 
-    - name: Enable plugin globally
+    - name: Validate plugin name
+      fail:
+        msg: "plugin_name is required to enable a Kong plugin"
+      when: plugin_name is not defined or plugin_name | length == 0
+
+    - name: Enable plugin globally in Kong
       command: >
         curl -s -X POST {{ kong_admin_url }}/plugins
         -d "name={{ plugin_name }}"
-        {% if plugin_config is defined %}
-        -d "config={{ plugin_config }}"
-        {% endif %}
-      register: plugin_output
+      register: enable_output
+      changed_when: "'id' in enable_output.stdout"
 
-    - name: Plugin enabled
+    - name: Plugin enable status
       debug:
         msg: "Plugin {{ plugin_name }} enabled successfully"
