@@ -1,4 +1,11 @@
 return {
   name = "json-to-xml",
-  fields = {}
+  fields = {
+    {
+      config = {
+        type = "record",
+        fields = {}
+      }
+    }
+  }
 }
