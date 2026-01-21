@@ -1,23 +1,31 @@
 ---
-- name: Deploy Kong Custom Plugin (Multi-plugin safe)
-  hosts: all
+- name: Deploy Kong Custom Plugin
+  hosts: kong
   become: true
   gather_facts: false
 
   vars:
-    kong_plugin_dir: /usr/local/share/lua/5.1/kong/plugins
-    kong_conf_file: /etc/kong/kong.conf
+    kong_conf: /etc/kong/kong.conf
+    kong_plugin_base: /usr/local/share/lua/5.1/kong/plugins
 
   tasks:
 
-    - name: Validate plugin name
-      fail:
-        msg: "plugin_name is required"
-      when: plugin_name is not defined or plugin_name | length == 0
+    # ============================================================
+    # VALIDATION
+    # ============================================================
+    - name: Validate plugin name from survey
+      assert:
+        that:
+          - plugin_name is defined
+          - plugin_name | length > 0
+        fail_msg: "plugin_name must be provided in AWX survey"
 
+    # ============================================================
+    # COPY PLUGIN FILES
+    # ============================================================
     - name: Ensure plugin directory exists
       file:
-        path: "{{ kong_plugin_dir }}/{{ plugin_name }}"
+        path: "{{ kong_plugin_base }}/{{ plugin_name }}"
         state: directory
         owner: kong
         group: kong
@@ -26,49 +34,66 @@
     - name: Copy plugin files to Kong
       copy:
         src: "../plugins/{{ plugin_name }}/"
-        dest: "{{ kong_plugin_dir }}/{{ plugin_name }}/"
+        dest: "{{ kong_plugin_base }}/{{ plugin_name }}/"
         owner: kong
         group: kong
         mode: '0644'
+      notify: Restart Kong
 
     - name: Verify handler.lua exists
       stat:
-        path: "{{ kong_plugin_dir }}/{{ plugin_name }}/handler.lua"
+        path: "{{ kong_plugin_base }}/{{ plugin_name }}/handler.lua"
       register: handler_check
 
-    - name: Fail if handler.lua missing
+    - name: Fail if handler.lua is missing
       fail:
         msg: "handler.lua not found for plugin {{ plugin_name }}"
       when: not handler_check.stat.exists
 
-    - name: Read existing plugins from kong.conf
-      shell: "grep '^plugins=' {{ kong_conf_file }} || true"
-      register: plugins_line
+    # ============================================================
+    # SAFE PLUGIN LIST MERGE (CRITICAL FIX)
+    # ============================================================
+    - name: Read current plugins list (last occurrence)
+      shell: |
+        grep '^plugins' {{ kong_conf }} | tail -n 1 | cut -d= -f2
+      register: current_plugins
       changed_when: false
+      failed_when: false
 
-    - name: Build updated plugins list
+    - name: Build merged plugin list
       set_fact:
-        updated_plugins: >-
+        merged_plugins: >-
           {{
             (
-              (
-                plugins_line.stdout
-                | regex_replace('^plugins=\\s*', '')
-                | default('bundled', true)
-                | split(',')
-              )
-              + [plugin_name]
+              (current_plugins.stdout | default('bundled'))
+              .split(',')
+              + [ plugin_name ]
             )
+            | map('trim')
             | unique
             | join(',')
           }}
 
-    - name: Update plugins list in kong.conf (append, do not replace)
-      lineinfile:
-        path: "{{ kong_conf_file }}"
-        regexp: '^plugins='
-        line: "plugins = {{ updated_plugins }}"
-        backup: yes
+    - name: Remove ALL existing plugins lines (prevent duplicates)
+      replace:
+        path: "{{ kong_conf }}"
+        regexp: '^plugins\s*=.*$'
+        replace: ''
 
-    - name: Restart Kong safely
+    - name: Write single merged plugins line
+      lineinfile:
+        path: "{{ kong_conf }}"
+        line: "plugins = {{ merged_plugins }}"
+        insertafter: '^#plugins'
+      notify: Restart Kong
+
+    # ============================================================
+    # POST-DEPLOY VALIDATION
+    # ============================================================
+    - name: Show final plugins list
+      debug:
+        msg: "Final plugins list: {{ merged_plugins }}"
+
+  handlers:
+    - name: Restart Kong
       command: kong restart
