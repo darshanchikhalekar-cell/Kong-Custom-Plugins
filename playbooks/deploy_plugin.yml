@@ -14,13 +14,31 @@
         msg: "plugin_name is required"
       when: plugin_name is not defined or plugin_name | length == 0
 
-    - name: Copy plugin files to Kong
-      copy:
-        src: "../plugins/{{ plugin_name }}"
-        dest: "{{ kong_plugin_dir }}/{{ plugin_name }}"
+    - name: Ensure plugin directory exists
+      file:
+        path: "{{ kong_plugin_dir }}/{{ plugin_name }}"
+        state: directory
         owner: kong
         group: kong
         mode: '0755'
+
+    - name: Copy plugin files to Kong
+      copy:
+        src: "../plugins/{{ plugin_name }}/"
+        dest: "{{ kong_plugin_dir }}/{{ plugin_name }}/"
+        owner: kong
+        group: kong
+        mode: '0644'
+
+    - name: Verify handler.lua exists
+      stat:
+        path: "{{ kong_plugin_dir }}/{{ plugin_name }}/handler.lua"
+      register: handler_check
+
+    - name: Fail if handler.lua missing
+      fail:
+        msg: "handler.lua not found for plugin {{ plugin_name }}"
+      when: not handler_check.stat.exists
 
     - name: Ensure plugin is enabled in kong.conf
       lineinfile:
