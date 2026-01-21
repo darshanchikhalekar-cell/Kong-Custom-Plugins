@@ -5,14 +5,13 @@
   gather_facts: false
 
   vars:
-    # Default Kong plugin directory (standard for Kong)
     kong_plugin_dir: /usr/local/share/lua/5.1/kong/plugins
 
   tasks:
 
     - name: Validate plugin name
       fail:
-        msg: "plugin_name is required and must match a folder under plugins/"
+        msg: "plugin_name is required"
       when: plugin_name is not defined or plugin_name | length == 0
 
     - name: Copy plugin files to Kong
@@ -30,10 +29,5 @@
         line: "plugins = bundled,{{ plugin_name }}"
         backup: yes
 
-    - name: Restart Kong
-  service:
-    name: kong-gateway
-    state: restarted
-
-
-
+    - name: Restart Kong safely
+      command: kong restart
