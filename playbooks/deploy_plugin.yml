@@ -31,6 +31,9 @@
         backup: yes
 
     - name: Restart Kong
-      service:
-        name: kong
-        state: restarted
+  service:
+    name: kong-gateway
+    state: restarted
+
+
+
