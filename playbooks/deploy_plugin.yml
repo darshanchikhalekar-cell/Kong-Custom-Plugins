@@ -6,7 +6,12 @@
 
   tasks:
 
-    - name: Copy plugin files
+    - name: Validate plugin name
+      fail:
+        msg: "plugin_name is required and must match a folder under plugins/"
+      when: plugin_name is not defined or plugin_name | length == 0
+
+    - name: Copy plugin files to Kong
       copy:
         src: "../plugins/{{ plugin_name }}"
         dest: "{{ kong_plugin_dir }}/{{ plugin_name }}"
