@@ -2,32 +2,64 @@
 - name: Enable Kong Custom Plugin
   hosts: all
   gather_facts: false
+  become: false
 
   vars:
-    # Default Kong Admin API URL
-    kong_admin_url: http://127.0.0.1:8001
+    kong_admin_url: http://localhost:8001
 
   tasks:
 
+    # ============================================================
+    # VALIDATION
+    # ============================================================
     - name: Validate plugin name
+      assert:
+        that:
+          - plugin_name is defined
+          - plugin_name | length > 0
+        fail_msg: "plugin_name must be provided"
+
+    - name: Validate service name when scope is service
       fail:
-        msg: "plugin_name is required"
-      when: plugin_name is not defined or plugin_name | length == 0
+        msg: "kong_service_name is required when deployment scope is 'service'"
+      when:
+        - deploy_scope == "service"
+        - kong_service_name is not defined or kong_service_name | trim == ""
 
-    - name: Check if plugin already enabled
-      command: >
-        curl -s {{ kong_admin_url }}/plugins
-      register: plugins_list
-      changed_when: false
+    # ============================================================
+    # ENABLE PLUGIN
+    # ============================================================
+    - name: Enable plugin globally
+      uri:
+        url: "{{ kong_admin_url }}/plugins"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          name: "{{ plugin_name }}"
+        status_code: [201, 409]
+      when: deploy_scope == "global"
 
-    - name: Enable plugin if not already enabled
-      command: >
-        curl -s -X POST {{ kong_admin_url }}/plugins
-        -d "name={{ plugin_name }}"
-      when: plugin_name not in plugins_list.stdout
-      register: enable_output
-      changed_when: "'id' in enable_output.stdout"
+    - name: Enable plugin on selected service
+      uri:
+        url: "{{ kong_admin_url }}/services/{{ kong_service_name }}/plugins"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          name: "{{ plugin_name }}"
+        status_code: [201, 409]
+      when: deploy_scope == "service"
 
-    - name: Plugin enable status
+    # ============================================================
+    # POST ENABLE INFO
+    # ============================================================
+    - name: Show enable summary
       debug:
-        msg: "Plugin {{ plugin_name }} is enabled"
+        msg: |
+          =====================================
+          KONG PLUGIN ENABLED
+          =====================================
+          Plugin Name : {{ plugin_name }}
+          Scope       : {{ deploy_scope }}
+          Service     : {{ kong_service_name | default('N/A') }}
+          Host        : {{ inventory_hostname }}
+          =====================================
