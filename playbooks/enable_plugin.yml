@@ -10,6 +10,14 @@
   tasks:
 
     # ============================================================
+    # NORMALIZE INPUTS
+    # ============================================================
+    - name: Normalize survey inputs
+      set_fact:
+        deploy_scope: "{{ deploy_scope | default('global') }}"
+        kong_service_name: "{{ kong_service_name | default('') }}"
+
+    # ============================================================
     # VALIDATION
     # ============================================================
     - name: Validate plugin name
@@ -19,12 +27,20 @@
           - plugin_name | length > 0
         fail_msg: "plugin_name must be provided"
 
+    - name: Validate headers for static-response-header plugin
+      fail:
+        msg: "header_key and header_value are required for static-response-header plugin"
+      when:
+        - plugin_name == "static-response-header"
+        - header_key is not defined or header_key | trim == "" or
+          header_value is not defined or header_value | trim == ""
+
     - name: Validate service name when scope is service
       fail:
         msg: "kong_service_name is required when deployment scope is 'service'"
       when:
         - deploy_scope == "service"
-        - kong_service_name is not defined or kong_service_name | trim == ""
+        - kong_service_name | trim == ""
 
     # ============================================================
     # ENABLE PLUGIN
@@ -36,6 +52,7 @@
         body_format: form-urlencoded
         body:
           name: "{{ plugin_name }}"
+          config.headers.{{ header_key }}: "{{ header_value }}"
         status_code: [201, 409]
       when: deploy_scope == "global"
 
@@ -46,6 +63,7 @@
         body_format: form-urlencoded
         body:
           name: "{{ plugin_name }}"
+          config.headers.{{ header_key }}: "{{ header_value }}"
         status_code: [201, 409]
       when: deploy_scope == "service"
 
@@ -61,5 +79,6 @@
           Plugin Name : {{ plugin_name }}
           Scope       : {{ deploy_scope }}
           Service     : {{ kong_service_name | default('N/A') }}
+          Header      : {{ header_key }}={{ header_value }}
           Host        : {{ inventory_hostname }}
           =====================================
