@@ -13,12 +13,12 @@
     # ============================================================
     # VALIDATION
     # ============================================================
-    - name: Validate plugin name from survey
+    - name: Validate plugin name from workflow survey
       assert:
         that:
           - plugin_name is defined
           - plugin_name | length > 0
-        fail_msg: "plugin_name must be provided in AWX survey"
+        fail_msg: "plugin_name must be provided in AWX workflow survey"
 
     # ============================================================
     # COPY PLUGIN FILES
@@ -51,7 +51,7 @@
       when: not handler_check.stat.exists
 
     # ============================================================
-    # SAFE PLUGIN LIST MERGE (CRITICAL FIX)
+    # SAFE PLUGIN LIST MERGE (CRITICAL FIX – KEEP AS IS)
     # ============================================================
     - name: Read current plugins list (last occurrence)
       shell: |
@@ -88,11 +88,18 @@
       notify: Restart Kong
 
     # ============================================================
-    # POST-DEPLOY VALIDATION
+    # POST-DEPLOY INFO
     # ============================================================
     - name: Show final plugins list
       debug:
-        msg: "Final plugins list: {{ merged_plugins }}"
+        msg: |
+          =====================================
+          KONG PLUGIN DEPLOYED
+          =====================================
+          Plugin Name : {{ plugin_name }}
+          Target Host : {{ inventory_hostname }}
+          Plugins     : {{ merged_plugins }}
+          =====================================
 
   handlers:
     - name: Restart Kong
