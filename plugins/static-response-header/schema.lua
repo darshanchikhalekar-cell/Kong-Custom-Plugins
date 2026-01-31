@@ -14,9 +14,12 @@ return {
               type = "map",
               keys = { type = "string" },
               values = { type = "string" },
-              required = true,
+              required = false,   -- 🔴 IMPORTANT CHANGE
             },
           },
+        },
+        default = {
+          headers = {},          -- allow empty config
         },
       },
     },
