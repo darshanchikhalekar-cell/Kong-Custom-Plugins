@@ -21,7 +21,7 @@
         fail_msg: "plugin_name must be provided in AWX workflow survey"
 
     # ============================================================
-    # COPY PLUGIN FILES
+    # DEPLOY PLUGIN FILES
     # ============================================================
     - name: Ensure plugin directory exists
       file:
@@ -38,7 +38,7 @@
         owner: kong
         group: kong
         mode: '0644'
-      notify: Restart Kong
+      register: plugin_copy
 
     - name: Verify handler.lua exists
       stat:
@@ -51,7 +51,7 @@
       when: not handler_check.stat.exists
 
     # ============================================================
-    # SAFE PLUGIN LIST MERGE (CRITICAL FIX – KEEP AS IS)
+    # SAFE PLUGIN LIST MERGE
     # ============================================================
     - name: Read current plugins list (last occurrence)
       shell: |
@@ -74,7 +74,7 @@
             | join(',')
           }}
 
-    - name: Remove ALL existing plugins lines (prevent duplicates)
+    - name: Remove ALL existing plugins lines
       replace:
         path: "{{ kong_conf }}"
         regexp: '^plugins\s*=.*$'
@@ -85,23 +85,45 @@
         path: "{{ kong_conf }}"
         line: "plugins = {{ merged_plugins }}"
         insertafter: '^#plugins'
-      notify: Restart Kong
+      register: plugin_conf_update
 
     # ============================================================
-    # POST-DEPLOY INFO
+    # SAFE KONG RESTART (ONLY IF NEEDED)
     # ============================================================
-    - name: Show final plugins list
+    - name: Stop Kong safely
+      command: kong stop
+      ignore_errors: true
+      when: plugin_copy.changed or plugin_conf_update.changed
+
+    - name: Remove dangling Kong sockets
+      file:
+        path: /usr/local/kong/sockets
+        state: absent
+      when: plugin_copy.changed or plugin_conf_update.changed
+
+    - name: Start Kong
+      command: kong start
+      when: plugin_copy.changed or plugin_conf_update.changed
+
+    - name: Verify Kong health
+      command: kong health
+      register: kong_health
+      retries: 5
+      delay: 5
+      until: kong_health.rc == 0
+      when: plugin_copy.changed or plugin_conf_update.changed
+
+    # ============================================================
+    # POST DEPLOY INFO
+    # ============================================================
+    - name: Show deploy summary
       debug:
         msg: |
           =====================================
           KONG PLUGIN DEPLOYED
           =====================================
           Plugin Name : {{ plugin_name }}
-          Target Host : {{ inventory_hostname }}
+          Host        : {{ inventory_hostname }}
           Plugins     : {{ merged_plugins }}
+          Restarted   : {{ plugin_copy.changed or plugin_conf_update.changed }}
           =====================================
-
-  handlers:
-    - name: Restart Kong
-      command: kong restart
-
