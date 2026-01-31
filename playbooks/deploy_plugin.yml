@@ -1,6 +1,6 @@
 ---
 - name: Deploy Kong Custom Plugin
-  hosts: kong
+  hosts: all
   become: true
   gather_facts: false
 
@@ -104,3 +104,4 @@
   handlers:
     - name: Restart Kong
       command: kong restart
+
