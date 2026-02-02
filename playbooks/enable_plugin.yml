@@ -27,14 +27,6 @@
           - plugin_name | length > 0
         fail_msg: "plugin_name must be provided"
 
-    - name: Validate headers for static-response-header plugin
-      fail:
-        msg: "header_key and header_value are required for static-response-header plugin"
-      when:
-        - plugin_name == "static-response-header"
-        - header_key is not defined or header_key | trim == "" or
-          header_value is not defined or header_value | trim == ""
-
     - name: Validate service name when scope is service
       fail:
         msg: "kong_service_name is required when deployment scope is 'service'"
@@ -43,7 +35,7 @@
         - kong_service_name | trim == ""
 
     # ============================================================
-    # ENABLE PLUGIN
+    # ENABLE PLUGIN (GLOBAL)
     # ============================================================
     - name: Enable plugin globally
       uri:
@@ -52,10 +44,12 @@
         body_format: form-urlencoded
         body:
           name: "{{ plugin_name }}"
-          config.headers.{{ header_key }}: "{{ header_value }}"
         status_code: [201, 409]
       when: deploy_scope == "global"
 
+    # ============================================================
+    # ENABLE PLUGIN (SERVICE)
+    # ============================================================
     - name: Enable plugin on selected service
       uri:
         url: "{{ kong_admin_url }}/services/{{ kong_service_name }}/plugins"
@@ -63,7 +57,6 @@
         body_format: form-urlencoded
         body:
           name: "{{ plugin_name }}"
-          config.headers.{{ header_key }}: "{{ header_value }}"
         status_code: [201, 409]
       when: deploy_scope == "service"
 
@@ -79,6 +72,5 @@
           Plugin Name : {{ plugin_name }}
           Scope       : {{ deploy_scope }}
           Service     : {{ kong_service_name | default('N/A') }}
-          Header      : {{ header_key }}={{ header_value }}
           Host        : {{ inventory_hostname }}
           =====================================
